@@ -50,9 +50,11 @@ alive() {
   ! pane | grep -q '\[AGENT-EXITED'
 }
 
-# Everything printed since the Nth prompt — i.e. just this turn.
+# Everything this turn printed. The prompt we typed into is the Nth one and our text
+# is echoed onto that same line, so the turn starts AT that prompt, not after it —
+# slicing from N+1 yields nothing but the empty trailing prompt.
 turn_output() {
-  pane | awk -v n="$1" '/^You:/{c++; if (c>n) p=1} p'
+  pane | awk -v n="$1" '/^You:/{c++} c>=n'
 }
 
 start_agent() {
