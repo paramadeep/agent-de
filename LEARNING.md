@@ -19,10 +19,10 @@ The irreducible minimum. When this phase is done you have an agent, just a weak 
 | 1 | Stateless API call | The LLM is a pure function: `f(messages) → message`. It remembers nothing between calls. | ✅ |
 | 2 | Conversation history | "Memory" is just a Python list you resend in full every turn. The harness owns it. | ✅ |
 | 3 | Tool schema + local dispatch | A tool is two separate things: a JSON schema the model reads, and a local function only the harness runs. The model can *ask*; it can never *do*. | ✅ |
-| 4 | **The agent loop** | Feed the tool result back and call again — repeat until the model stops asking. This single loop is the whole difference between a chatbot and an agent. | 🔨 |
-| 5 | Correct message assembly | One assistant message per API response (roles must alternate); all tool results for a turn batched into one user message; `content` must be a string. | 🔨 |
+| 4 | **The agent loop** | Feed the tool result back and call again — repeat until the model stops asking. This single loop is the whole difference between a chatbot and an agent. | ✅ |
+| 5 | Correct message assembly | One assistant message per API response (roles must alternate); all tool results for a turn batched into one user message; `content` must be a string. | ✅ |
 | 5b | Testing the loop | Swap in a fake client and the loop becomes pure logic you can assert exactly — no key, no cost, no model prose to regex against. Testing it *through* an LLM tests the LLM. | ✅ |
-| 6 | System prompt | Where the agent's identity, rules and environment context live. Cheap to change, huge effect on behaviour. | ⬜ |
+| 6 | System prompt | Where the agent's identity, rules and environment context live. Not a message — a separate parameter, resent on every call. Cheap to change, huge effect on behaviour. | 🔨 |
 
 ## Phase 2 — Becoming a *coding* agent
 
@@ -55,29 +55,18 @@ Tools are the agent's hands. This is where capability actually comes from.
 
 ## Where the code stands right now
 
-Steps 1–3 work. `tools/` is now its own module (`tools/index.py` holds the schemas,
-one file per tool) and `read_file` returns a plain string — so the old
-"`tool_result.content` must be a string" bug is already gone.
+**Steps 1–5 are done**, verified at both layers:
 
-Step 4 is in progress. `uv run pytest` is red: `run_turn()` doesn't exist yet.
+- `make test` → 11/11
+- `make selftest` → 5/5 against the real API, including `multihop`: the agent reads a
+  file, finds it points at a second file, reads that one too, and answers — two tool
+  round-trips inside one user turn. That's the loop genuinely looping.
 
-**Crash on any reply that doesn't call a tool.** `process_response` assigns
-`is_last_call_tool` only inside the `tool_use` branch, so a plain text reply reaches
-`return messages, is_last_call_tool` with the name never bound → `UnboundLocalError`.
+`run_turn()` now owns the agent loop and `main()` is just the REPL around it. The
+`is_last_call_tool` flag disappeared on its own, exactly as expected: once the loop
+lives inside `run_turn`, there's nothing left to smuggle back out.
 
-That's a one-line fix, but the flag is the part worth reconsidering. It's trying to
-make the *outer* REPL loop double as the *inner* agent loop, and those have different
-exit conditions:
-
-- outer: the human typed `exit`
-- inner: Claude stopped asking for tools
-
-`response.stop_reason` tells you the second one directly — nothing needs to be
-inferred by scanning blocks and setting a flag.
-
-**Still standing:** `process_response` appends the text block as its own message *and*
-the whole `response.content` as a second one, so the same text goes back twice in two
-consecutive assistant messages. `test_roles_alternate` catches this.
+Next up is step 6 — see `tests/test_system_prompt.py`, currently red.
 
 ### What the loop should look like
 

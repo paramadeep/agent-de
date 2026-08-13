@@ -8,8 +8,7 @@ If a test fails, the failure names the concept it's protecting. Fixing the code 
 yours; see CLAUDE.md.
 """
 
-import pytest
-
+from tests.adapter import drive
 from tests.fakes import (
     FakeClient,
     reply,
@@ -19,39 +18,6 @@ from tests.fakes import (
     tool_use,
     wants_tool,
 )
-from tools.index import TOOLS
-
-# ── binding to your implementation ──────────────────────────────────────────
-# These tests pin BEHAVIOUR, not naming. The contract is:
-#
-#     run_turn(client, messages, tools) -> messages
-#
-#   * `messages` already ends with the new user message
-#   * it loops until Claude stops asking for tools
-#   * it returns the updated history (returning None and mutating in place is
-#     fine too — the adapter below accepts either)
-#
-# Named it something else? Change these two things and nothing else in this file.
-
-try:
-    from main import run_turn
-except ImportError as exc:  # pragma: no cover
-    raise ImportError(
-        "These tests expect main.run_turn(client, messages, tools).\n"
-        "It doesn't exist yet — that's step 4 in LEARNING.md, and it's yours to "
-        "write.\nIf you named it differently, update the adapter at the top of "
-        "tests/test_agent_loop.py."
-    ) from exc
-
-
-def drive(client, messages, tools=TOOLS):
-    result = run_turn(client, messages, tools)
-    return messages if result is None else result
-
-
-@pytest.fixture
-def convo():
-    return [{"role": "user", "content": "hello"}]
 
 
 def assistant_messages(messages):

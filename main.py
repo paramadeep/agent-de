@@ -5,6 +5,25 @@ from tools.index import TOOLS, availble_tools
 
 MODEL = "claude-haiku-4-5"
 
+# TODO (step 6 — the system prompt). Add a SYSTEM string here and pass it to the API
+# as `system=SYSTEM`, alongside model/messages/tools.
+#
+# Two things to get right, both covered by tests/test_system_prompt.py:
+#   * it is NOT a message. No role, no place in the user/assistant alternation.
+#     `{"role": "system", ...}` is an OpenAI-ism and Anthropic rejects it.
+#   * it must go out on EVERY call, including the follow-up calls inside one turn
+#     after a tool result. The API is stateless — nothing carries over.
+#
+# What tends to belong in one (the wording is yours — this is the most editable,
+# highest-leverage string in the whole agent):
+#   * who the agent is and how terse it should be
+#   * when to reach for a tool vs. just answer
+#   * environment facts the model can't know: cwd, OS, today's date
+#   * hard rules — what it must never do
+#
+# Try it empty first, then add one line at a time and watch `make selftest` change
+# behaviour. That feedback loop is the real lesson of this step.
+
 def run_tool(tool_name, tool_input):
     try:
         return availble_tools[tool_name](**tool_input)
