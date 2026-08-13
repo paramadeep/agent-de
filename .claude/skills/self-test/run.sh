@@ -63,7 +63,7 @@ start_agent() {
   if [[ -z "${CLAUDE_KEY:-}" ]]; then
     echo "FATAL: CLAUDE_KEY is not set and $REPO/.envrc did not provide it." >&2
     exit 2
-  fi
+fi
 
   # If the agent dies, the pane must outlive it or the traceback dies with the
   # session — so trail the command with a marker and an idle sleep.

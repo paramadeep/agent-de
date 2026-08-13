@@ -10,7 +10,6 @@ yours; see CLAUDE.md.
 
 import pytest
 
-from tools.index import TOOLS
 from tests.fakes import (
     FakeClient,
     reply,
@@ -20,6 +19,7 @@ from tests.fakes import (
     tool_use,
     wants_tool,
 )
+from tools.index import TOOLS
 
 # ── binding to your implementation ──────────────────────────────────────────
 # These tests pin BEHAVIOUR, not naming. The contract is:
