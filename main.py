@@ -2,41 +2,14 @@ import os
 
 from anthropic import Anthropic
 
+from tools.index import TOOLS, availble_tools
+
 client = Anthropic(
     api_key=os.environ.get("CLAUDE_KEY"),
 )
 MODEL = "claude-haiku-4-5"
 
-TOOLS = [
-    {
-        "name": "read_file",
-        "description": "Read and return the full text contents of a file at the given path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative or absolute path to the file to read.",
-                }
-            },
-            "required": ["path"],
-        },
-    }
-]
 
-
-def read_file(path):
-    try:
-        with open(path, "r") as f:
-            return { "file_content": f.read() }
-    except FileNotFoundError:
-        return { "error": f"Error: File not found at '{path}'." }
-    except Exception as e:  # noqa: BLE001
-        return { "error": f"Error reading file '{path}': {e}" }
-
-availble_tools = {
-    "read_file" : read_file,
-}
 
 def run_tool(tool_name, tool_input):
     try:
@@ -54,27 +27,31 @@ def process_response(response):
             messages.append({"role": "assistant", "content": block.text})
             print(f"Assistant: {block.text}")
         elif block.type == "tool_use":
+            is_last_call_tool = True
             tool_result = run_tool(block.name, block.input)
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": [
                 {"type": "tool_result", "tool_use_id": block.id, "content": tool_result}
             ]})
-    return messages
+            # print(f"Tool result: {tool_result}")
+    return messages, is_last_call_tool
+    
 
 def main():
     messages = []  # conversation history — this list grows every turn
-    print("Chat with Claude. Type 'exit' to quit.\n")
-
+    print("Chat with AgentDe. Type 'exit' to quit.\n")
+    is_last_call_tool = False
     while True:
-        user_input = input("You: ").strip()
-        if user_input.lower() in ("exit", "quit"):
-            break
-        message = {"role": "user", "content": user_input}
-        messages.append(message)
+        if not is_last_call_tool:
+            user_input = input("You: ").strip()
+            if user_input.lower() in ("exit", "quit"):
+                break
+            message = {"role": "user", "content": user_input}
+            messages.append(message)
         response = client.messages.create(
             model=MODEL, messages=messages, max_tokens=1024, tools=TOOLS
         )
-        messages_from_response_processing = process_response(response)
+        messages_from_response_processing, is_last_call_tool = process_response(response)
         messages.extend(messages_from_response_processing)
 
         # TODO (step 4 — the agent loop):

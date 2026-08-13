@@ -21,6 +21,7 @@ The irreducible minimum. When this phase is done you have an agent, just a weak 
 | 3 | Tool schema + local dispatch | A tool is two separate things: a JSON schema the model reads, and a local function only the harness runs. The model can *ask*; it can never *do*. | ✅ |
 | 4 | **The agent loop** | Feed the tool result back and call again — repeat until the model stops asking. This single loop is the whole difference between a chatbot and an agent. | 🔨 |
 | 5 | Correct message assembly | One assistant message per API response (roles must alternate); all tool results for a turn batched into one user message; `content` must be a string. | 🔨 |
+| 5b | Testing the loop | Swap in a fake client and the loop becomes pure logic you can assert exactly — no key, no cost, no model prose to regex against. Testing it *through* an LLM tests the LLM. | ✅ |
 | 6 | System prompt | Where the agent's identity, rules and environment context live. Cheap to change, huge effect on behaviour. | ⬜ |
 
 ## Phase 2 — Becoming a *coding* agent
@@ -54,30 +55,29 @@ Tools are the agent's hands. This is where capability actually comes from.
 
 ## Where the code stands right now
 
-`main.py` has steps 1–3 working: multi-turn chat, one tool (`read_file`) defined
-with a schema, and a `run_tool` dispatcher.
+Steps 1–3 work. `tools/` is now its own module (`tools/index.py` holds the schemas,
+one file per tool) and `read_file` returns a plain string — so the old
+"`tool_result.content` must be a string" bug is already gone.
 
-The gap is step 4 — and it hides three concrete bugs worth understanding before
-fixing, because each one *is* the lesson:
+Step 4 is in progress. `uv run pytest` is red: `run_turn()` doesn't exist yet.
 
-1. **The loop doesn't loop.** `process_response` runs the tool, appends the
-   `tool_result` to `messages`… and then `main()` goes straight back to `input()`.
-   Claude never gets called again, so it never sees what the file contained. Right
-   now you have to type another message just to make it react to its own tool call.
+**Crash on any reply that doesn't call a tool.** `process_response` assigns
+`is_last_call_tool` only inside the `tool_use` branch, so a plain text reply reaches
+`return messages, is_last_call_tool` with the name never bound → `UnboundLocalError`.
 
-2. **The assistant turn gets appended twice.** When Claude emits text *and* a tool
-   call in one response (the common case — "I'll read that for you" + `tool_use`),
-   `process_response` appends the text as its own message *and* the whole
-   `response.content` as a second one. So the same text is sent back twice, in two
-   consecutive assistant messages — malformed history that the API is likely to
-   reject outright on role alternation. Two `tool_use` blocks in one response would
-   append it twice over again. Fix: append the assistant turn exactly once, as
-   `response.content`.
+That's a one-line fix, but the flag is the part worth reconsidering. It's trying to
+make the *outer* REPL loop double as the *inner* agent loop, and those have different
+exit conditions:
 
-3. **`tool_result.content` must be a string.** `read_file` returns a `dict`, which
-   the API rejects. `json.dumps()` it.
+- outer: the human typed `exit`
+- inner: Claude stopped asking for tools
 
-Fixing step 4 properly makes all three go away at once.
+`response.stop_reason` tells you the second one directly — nothing needs to be
+inferred by scanning blocks and setting a flag.
+
+**Still standing:** `process_response` appends the text block as its own message *and*
+the whole `response.content` as a second one, so the same text goes back twice in two
+consecutive assistant messages. `test_roles_alternate` catches this.
 
 ### What the loop should look like
 
