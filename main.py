@@ -1,9 +1,12 @@
 import os
 from typing import Any
 from anthropic import Anthropic
+
+from system_prompt import SYSTEM
 from tools.index import TOOLS, availble_tools
 
 MODEL = "claude-haiku-4-5"
+
 
 # TODO (step 6 — the system prompt). Add a SYSTEM string here and pass it to the API
 # as `system=SYSTEM`, alongside model/messages/tools.
@@ -51,7 +54,7 @@ def run_turn(client,messages: list[Any],tools) :
     had_claude_asked_to_stop  = False
     while not had_claude_asked_to_stop :
         response = client.messages.create(
-            model=MODEL, messages=messages, max_tokens=16384, tools=tools
+            model=MODEL, messages=messages, max_tokens=16384, tools=tools, system=SYSTEM
         )
         had_claude_asked_to_stop = response.stop_reason != "tool_use"
         messages_from_response_processing = process_response(response)
